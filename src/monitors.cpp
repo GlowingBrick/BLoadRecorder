@@ -41,7 +41,7 @@ public:
         monitors_.push_back(std::make_unique<CPUFreqMonitor>());
         monitors_.push_back(std::make_unique<CPULoadMonitor>());
         monitors_.push_back(std::make_unique<ThermalMonitor>());
-        monitors_.push_back(std::make_unique<FPSMonitor>());
+        monitors_.push_back(std::make_unique<FPSMonitor>(true));
         monitors_.push_back(std::make_unique<ThreadMonitor>());
 
         std::cout << "启动监控器..." << std::endl;
