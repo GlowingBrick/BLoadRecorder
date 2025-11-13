@@ -1,0 +1,1 @@
+/mnt/drive-d/code/android-ndk/android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang++  -Ofast -flto -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/BMonitor.dir/link.d CMakeFiles/BMonitor.dir/src/monitors.cpp.o -o BMonitor  -static-libstdc++
