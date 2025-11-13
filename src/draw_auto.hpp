@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+//用于将数据画成折线图，svg格式
 //最早是画频率图的，改改用来画别的。变量名懒得改了
 class SVGFreqPlotter {
 public:
@@ -59,8 +60,8 @@ public:
         StyleParams() : width(1440), height(720),
                         chart_top(80), chart_bottom(580),
                         left_margin(100), right_margin(50), bottom_margin(120),
-                        title_font_size(32), subtitle_font_size(20),
-                        axis_font_size(18), legend_font_size(18), tick_font_size(16),
+                        title_font_size(48), subtitle_font_size(25),
+                        axis_font_size(18), legend_font_size(25), tick_font_size(18),
                         axis_line_width(2.5), grid_line_width(1.0),
                         data_line_width(3.0), legend_border_width(1.0),
                         background_color("white"), axis_color("#333333"),
@@ -113,17 +114,16 @@ public:
         }
 
         svg.str("");
-        svg.clear(); 
+        svg.clear();
         generateSVG(svg, title, y_label, core_order, time_data, value_data,
                     min_time, max_time, min_val, max_val, realmax);
 
-        if(!filename.empty()){
+        if (!filename.empty()) {
             saveSVG(filename);
         }
-
     }
 
-    std::string getSvG(){
+    std::string getSVG() {
         return svg.str();
     }
 
@@ -133,10 +133,67 @@ public:
         file.close();
     }
 
+    static std::string concatenateSVGsVertically(const std::vector<std::string>& svgContents,   //将多个svg纵向拼合
+                                        double svgWidth, double svgHeight, 
+                                        double spacing = 0.0,
+                                        const std::string& title = "",
+                                        const std::string& timestamp = "") {
+        if (svgContents.empty()) return "";
+        
+        double headerHeight = 0;
+        if (!title.empty() || !timestamp.empty()) {
+            headerHeight = 150;
+        }
+        
+        double totalHeight = headerHeight + svgHeight * svgContents.size() + spacing * (svgContents.size() - 1);
+        
+        std::ostringstream result;
+        result << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+        result << "<svg xmlns=\"http://www.w3.org/2000/svg\" "
+            << "viewBox=\"0 0 " << svgWidth << " " << totalHeight << "\" "
+            << "width=\"" << svgWidth << "\" height=\"" << totalHeight << "\">\n";
+        
+        result << "  <rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n";
+        
+        if (!title.empty() || !timestamp.empty()) { //尝试添加标题
+            result << "  <!-- Header Section -->\n";
+            result << "  <g font-family=\"Arial, sans-serif\">\n";
+            
+            if (!title.empty()) {
+                result << "    <text x=\"" << 100 << "\" y=\"55\" font-size=\"48\" font-weight=\"bold\">"
+                    << title << "</text>\n";
+            }
+            
+            if (!timestamp.empty()) {
+                result << "    <text x=\"" << 100 << "\" y=\"85\" font-size=\"30\" fill=\"#666\">"
+                    << timestamp << "</text>\n";
+            }
+            
+            result << "  </g>\n";
+        }
+        
+        for (size_t i = 0; i < svgContents.size(); ++i) {   //嵌入所有svg
+            std::string content = svgContents[i];
+            
+            if (content.find("<?xml") == 0) {
+                size_t xmlEnd = content.find("?>");
+                if (xmlEnd != std::string::npos) {
+                    content = content.substr(xmlEnd + 2);
+                }
+            }
+            
+            double yPosition = headerHeight + i * (svgHeight + spacing);
+            
+            result << "  <g transform=\"translate(0 " << yPosition << ")\">\n";
+            result << content << "\n";
+            result << "  </g>\n";
+        }
+        
+        result << "</svg>";
+        return result.str();
+    }
 
 private:
-
-
     std::vector<std::string> detectAndSortCores(const std::vector<FrameData>& frames) {
         if (params.order.empty()) {
             std::set<std::string> core_set;
@@ -518,13 +575,11 @@ private:
         }
 
         auto it = std::upper_bound(nice_intervals.begin(), nice_intervals.end(), ideal_interval);
-        
+
         if (it != nice_intervals.begin()) {
             return *(it);
         } else {
             return nice_intervals.front();
         }
     }
-
-
 };

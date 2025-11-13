@@ -59,6 +59,15 @@ public:
         std::cout << std::endl;
 
         nlohmann::json result;
+        result["info"]["name"]=package_name_;
+
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        
+        std::stringstream sstime;
+        sstime << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+        result["info"]["time"]=sstime.str();
+
         for (auto& monitor : monitors_) {
             std::cout << "停止: " << monitor->name() << std::endl;
             result[monitor->name()] = monitor->stop();

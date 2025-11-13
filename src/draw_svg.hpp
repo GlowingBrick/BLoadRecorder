@@ -12,6 +12,18 @@
 #include <string>
 #include <vector>
 
+double data_line_width(std::size_t size) {
+    if (size > 100) {
+        if (size <= 800) {
+            return 3.0 - ((static_cast<float>(size) - 100.0) / 700.0) * 2.2;
+        } else {
+            return 0.8;
+        }
+    } else {
+        return 3;
+    }
+}
+
 std::string sanitizeCpuSet(const std::string& cpu_set);
 
 struct ThreadInfo {
@@ -30,8 +42,8 @@ std::map<std::string, std::vector<SVGFreqPlotter::FrameData>> parseThreadData(co
     }
 
     // 第一遍：收集所有线程信息，确定每个线程的主要cpu-set
-    std::map<std::string, std::map<std::string, int>> thread_cpu_set_counts; 
-    std::map<std::string, std::vector<float>> thread_loads;    
+    std::map<std::string, std::map<std::string, int>> thread_cpu_set_counts;
+    std::map<std::string, std::vector<float>> thread_loads;
 
     for (const auto& frame : result["thread"]) {
         uint64_t time_ms = frame["time_ms"];
@@ -47,7 +59,7 @@ std::map<std::string, std::vector<SVGFreqPlotter::FrameData>> parseThreadData(co
 
                         std::string thread_id = thread_name + "(" + std::to_string(tid) + ")";  // 线程名(tid),防重名
 
-                        thread_cpu_set_counts[thread_id][cpu_set]++;    //记录cpu-set
+                        thread_cpu_set_counts[thread_id][cpu_set]++;  //记录cpu-set
 
                         thread_loads[thread_id].push_back(load);
 
@@ -60,7 +72,7 @@ std::map<std::string, std::vector<SVGFreqPlotter::FrameData>> parseThreadData(co
         }
     }
 
-    for (auto& [thread_id, thread_info] : all_threads) {    //寻找主要存在的cpu-set
+    for (auto& [thread_id, thread_info] : all_threads) {  //寻找主要存在的cpu-set
         if (thread_cpu_set_counts.find(thread_id) != thread_cpu_set_counts.end()) {
             const auto& cpu_set_counts = thread_cpu_set_counts[thread_id];
             std::string main_cpu_set = "";
@@ -76,7 +88,6 @@ std::map<std::string, std::vector<SVGFreqPlotter::FrameData>> parseThreadData(co
             thread_info.cpu_set = main_cpu_set;
         }
     }
-
 
     for (const auto& frame : result["thread"]) {
         uint64_t time_ms = frame["time_ms"];
@@ -94,7 +105,7 @@ std::map<std::string, std::vector<SVGFreqPlotter::FrameData>> parseThreadData(co
 
                         std::string thread_id = thread_name + "(" + std::to_string(tid) + ")";
 
-                        if (all_threads.find(thread_id) != all_threads.end()) { //按cpu—set分组
+                        if (all_threads.find(thread_id) != all_threads.end()) {  //按cpu—set分组
                             std::string main_cpu_set = all_threads[thread_id].cpu_set;
 
                             if (current_frame_by_cpuset.find(main_cpu_set) == current_frame_by_cpuset.end()) {
@@ -113,7 +124,7 @@ std::map<std::string, std::vector<SVGFreqPlotter::FrameData>> parseThreadData(co
         }
     }
 
-    for (auto& [cpu_set, frames] : cpu_set_frames) {    //修补数据
+    for (auto& [cpu_set, frames] : cpu_set_frames) {  //修补数据
         std::set<std::string> cpu_set_threads;
         for (const auto& thread_info : all_threads) {
             if (thread_info.second.cpu_set == cpu_set) {
@@ -159,7 +170,7 @@ std::vector<std::string> processCPUFramesEfficient(const std::vector<SVGFreqPlot
     return tmpdata;
 }
 
-void drawThreadCharts(const nlohmann::json& result, const std::string& base_filename = "thread") {  //绘图
+void drawThreadCharts(const nlohmann::json& result, std::vector<std::string>& svgs) {  //绘图
     auto cpu_set_frames = parseThreadData(result);
 
     if (cpu_set_frames.empty()) {
@@ -176,16 +187,16 @@ void drawThreadCharts(const nlohmann::json& result, const std::string& base_file
         style.custom_min_value = 0.0f;
         style.custom_max_value = 100.0f;
         style.order = processCPUFramesEfficient(frames, 15);
+        style.legend_font_size=18;
+        style.data_line_width = data_line_width(frames.size());
 
         SVGFreqPlotter plotter(style);
 
-        std::string filename = base_filename + "_cpu" + sanitizeCpuSet(cpu_set) + ".svg";
-        std::string title = "线程负载监控 - CPU Set: " + cpu_set;
+        std::string title = "线程负载 - CPU Set: " + cpu_set;
 
-        plotter.drawChart(frames, title, "负载(%)", filename);
-
+        plotter.drawChart(frames, title, "负载(%)");
+        svgs.push_back(plotter.getSVG());
     }
-
 }
 
 // 辅助函数：清理cpu-set字符串用于文件名
@@ -376,6 +387,22 @@ std::vector<std::string> sortcpus(const std::map<std::string, float>& ord) {
 }
 
 void draw_svg(nlohmann::json& result, std::string pkg) {
+    std::vector<std::string> svgs;
+    // 绘制fps===================
+    {
+        auto frame_data = parseFpsData(result);
+        SVGFreqPlotter::StyleParams style;
+        style.use_custom_range = true;
+        style.custom_min_value = 0.0f;
+        style.custom_max_value = std::numeric_limits<float>::infinity();
+        style.label = "帧率";
+
+        style.data_line_width = data_line_width(frame_data.size());
+
+        SVGFreqPlotter plotter(style);
+        plotter.drawChart(frame_data, "帧率", "帧率(FPS)");//, "fps.svg");
+        svgs.push_back(plotter.getSVG());
+    }
     // 绘制频率============
     {
         auto frame_data = CPUFreqFrameData(result);
@@ -387,8 +414,12 @@ void draw_svg(nlohmann::json& result, std::string pkg) {
         if (!frame_data.empty()) {
             style.order = sortcpus(frame_data[0].frequencies);
         }
+
+        style.data_line_width = data_line_width(frame_data.size());
+
         SVGFreqPlotter plotter(style);
-        plotter.drawChart(frame_data, "CPU_Freq", "Ghz", "cpu_freq.svg");
+        plotter.drawChart(frame_data, "CPU_Freq", "Ghz");//, "cpu_freq.svg");
+        svgs.push_back(plotter.getSVG());
     }
 
     // 绘制负载=============
@@ -404,10 +435,13 @@ void draw_svg(nlohmann::json& result, std::string pkg) {
             style.order = sortcpus(frame_data[0].frequencies);
         }
 
+        style.data_line_width = data_line_width(frame_data.size());
+
         SVGFreqPlotter plotter(style);
-        plotter.drawChart(frame_data, "CPU负载监控", "负载(%)", "cpu_load.svg");
+        plotter.drawChart(frame_data, "CPU负载", "负载(%)");//, "cpu_load.svg");
+        svgs.push_back(plotter.getSVG());
     }
-    // 绘制fps和温度=============
+    // 温度=============
     {
         auto frame_data = parseThermalData(result);
         SVGFreqPlotter::StyleParams style;
@@ -415,22 +449,32 @@ void draw_svg(nlohmann::json& result, std::string pkg) {
         style.custom_min_value = 0.0f;
         style.custom_max_value = std::numeric_limits<float>::infinity();
         style.label = "温度";
+
+        style.data_line_width = data_line_width(frame_data.size());
+
         SVGFreqPlotter plotter(style);
-        plotter.drawChart(frame_data, "处理器温度监控", "温度(°C)", "thermal.svg");
-    }
-    {
-        auto frame_data = parseFpsData(result);
-        SVGFreqPlotter::StyleParams style;
-        style.use_custom_range = true;
-        style.custom_min_value = 0.0f;
-        style.custom_max_value = std::numeric_limits<float>::infinity();
-        style.label = "帧率";
-        SVGFreqPlotter plotter(style);
-        plotter.drawChart(frame_data, "帧率", "帧率(FPS)", "fps.svg");
+        plotter.drawChart(frame_data, "CPU温度", "温度(°C)");//, "thermal.svg");
+        svgs.push_back(plotter.getSVG());
     }
 
     {
-        drawThreadCharts(result, pkg);
+        drawThreadCharts(result,svgs);
     }
-    std::cout<<"图表已生成"<<std::endl;
+
+    std::string name;
+    std::string time;
+    if(result.contains("info")){
+        if(result["info"].is_object())
+        name=result["info"].value("name","");
+        time=result["info"].value("time","");
+
+    }
+
+    std::string out=SVGFreqPlotter::concatenateSVGsVertically(svgs,1440.0,720.0,50.0,name,time);
+    std::string filename=pkg+".svg";
+    std::ofstream file(filename);
+    file << out;
+    file.close();
+
+    std::cout << "图表已生成" << std::endl;
 }
