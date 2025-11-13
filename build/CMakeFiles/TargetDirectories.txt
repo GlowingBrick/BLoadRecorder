@@ -1,3 +1,0 @@
-/mnt/drive-d/code/modules/t/FPSMonitor/build/CMakeFiles/BMonitor.dir
-/mnt/drive-d/code/modules/t/FPSMonitor/build/CMakeFiles/edit_cache.dir
-/mnt/drive-d/code/modules/t/FPSMonitor/build/CMakeFiles/rebuild_cache.dir
