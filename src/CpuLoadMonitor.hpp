@@ -74,8 +74,7 @@ private:
         const std::vector<std::string> gpu_load_nodes = {
             "/sys/class/kgsl/kgsl-3d0/devfreq/gpu_load",  // 高通
             "/sys/devices/platform/soc/3d00000.qcom,kgsl-3d0/devfreq/3d00000.qcom,kgsl-3d0/gpu_load",  //也是高通
-            "/sys/kernel/gpu/gpu_busy",
-            "/sys/class/devfreq/gpufreq/mali_ondemand/utilisation",
+            "/sys/kernel/gpu/gpu_busy"
         };
         has_gpu_ = false;
         for (const auto& node : gpu_load_nodes) {

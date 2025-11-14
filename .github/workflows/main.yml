@@ -1,0 +1,37 @@
+name: Build NDK Project
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code with submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up NDK
+      run: |
+        wget https://dl.google.com/android/repository/android-ndk-r27d-linux.zip
+        unzip -q android-ndk-r27d-linux.zip
+        echo "ANDROID_NDK=$PWD/android-ndk-r27d" >> $GITHUB_ENV
+
+    - name: Build both versions
+      run: |
+        cd ..
+        mkdir -p build
+        cd build
+        cmake ..
+        make -j$(nproc)
+
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: BMonitor
+        path: build/BMonitor
+        retention-days: 30
+

@@ -36,6 +36,7 @@ public:
         double axis_line_width;
         double grid_line_width;
         double data_line_width;
+        double data_line_opacity;
         double legend_border_width;
 
         // 颜色
@@ -53,9 +54,13 @@ public:
         // 自定义Y轴范围
         float custom_min_value;
         float custom_max_value;
+        bool use_custom_min_range;
+        bool use_custom_max_range;
         bool use_custom_range;
-        std::string label;
-        std::vector<std::string> order;
+        std::vector<double> ticks;  //指定y轴刻度
+
+        std::string label;  //指定标签
+        std::vector<std::string> order;     //指定顺序
 
         StyleParams() : width(1440), height(720),
                         chart_top(80), chart_bottom(580),
@@ -63,12 +68,13 @@ public:
                         title_font_size(48), subtitle_font_size(25),
                         axis_font_size(18), legend_font_size(25), tick_font_size(18),
                         axis_line_width(2.5), grid_line_width(1.0),
-                        data_line_width(3.0), legend_border_width(1.0),
+                        data_line_width(3.0), data_line_opacity(0.7), legend_border_width(1.0),
                         background_color("white"), axis_color("#333333"),
                         grid_color("#E0E0E0"), text_color("black"),
                         max_y_ticks(3), max_x_ticks(6),
                         legend_items_per_row(5), legend_item_height(35),
-                        custom_min_value(0.0f), custom_max_value(0.0f), use_custom_range(false), label("") {}
+                        custom_min_value(0.0f), custom_max_value(100.0f), use_custom_range(false),
+                        use_custom_max_range(true), use_custom_min_range(true), ticks({}), label("") {}
     };
 
 private:
@@ -133,62 +139,62 @@ public:
         file.close();
     }
 
-    static std::string concatenateSVGsVertically(const std::vector<std::string>& svgContents,   //将多个svg纵向拼合
-                                        double svgWidth, double svgHeight, 
-                                        double spacing = 0.0,
-                                        const std::string& title = "",
-                                        const std::string& timestamp = "") {
+    static std::string concatenateSVGsVertically(const std::vector<std::string>& svgContents,  //将多个svg纵向拼合
+                                                 double svgWidth, double svgHeight,
+                                                 double spacing = 0.0,
+                                                 const std::string& title = "",
+                                                 const std::string& timestamp = "") {
         if (svgContents.empty()) return "";
-        
+
         double headerHeight = 0;
         if (!title.empty() || !timestamp.empty()) {
             headerHeight = 150;
         }
-        
+
         double totalHeight = headerHeight + svgHeight * svgContents.size() + spacing * (svgContents.size() - 1);
-        
+
         std::ostringstream result;
         result << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
         result << "<svg xmlns=\"http://www.w3.org/2000/svg\" "
-            << "viewBox=\"0 0 " << svgWidth << " " << totalHeight << "\" "
-            << "width=\"" << svgWidth << "\" height=\"" << totalHeight << "\">\n";
-        
+               << "viewBox=\"0 0 " << svgWidth << " " << totalHeight << "\" "
+               << "width=\"" << svgWidth << "\" height=\"" << totalHeight << "\">\n";
+
         result << "  <rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n";
-        
-        if (!title.empty() || !timestamp.empty()) { //尝试添加标题
+
+        if (!title.empty() || !timestamp.empty()) {  //尝试添加标题
             result << "  <!-- Header Section -->\n";
             result << "  <g font-family=\"Arial, sans-serif\">\n";
-            
+
             if (!title.empty()) {
                 result << "    <text x=\"" << 100 << "\" y=\"55\" font-size=\"48\" font-weight=\"bold\">"
-                    << title << "</text>\n";
+                       << title << "</text>\n";
             }
-            
+
             if (!timestamp.empty()) {
                 result << "    <text x=\"" << 100 << "\" y=\"85\" font-size=\"30\" fill=\"#666\">"
-                    << timestamp << "</text>\n";
+                       << timestamp << "</text>\n";
             }
-            
+
             result << "  </g>\n";
         }
-        
-        for (size_t i = 0; i < svgContents.size(); ++i) {   //嵌入所有svg
+
+        for (size_t i = 0; i < svgContents.size(); ++i) {  //嵌入所有svg
             std::string content = svgContents[i];
-            
+
             if (content.find("<?xml") == 0) {
                 size_t xmlEnd = content.find("?>");
                 if (xmlEnd != std::string::npos) {
                     content = content.substr(xmlEnd + 2);
                 }
             }
-            
+
             double yPosition = headerHeight + i * (svgHeight + spacing);
-            
+
             result << "  <g transform=\"translate(0 " << yPosition << ")\">\n";
             result << content << "\n";
             result << "  </g>\n";
         }
-        
+
         result << "</svg>";
         return result.str();
     }
@@ -253,37 +259,6 @@ private:
     }
 
     std::pair<float, float> getValueRange(const std::map<std::string, std::vector<float>>& value_data) {
-        if (params.use_custom_range) {
-            bool min_valid = std::isfinite(params.custom_min_value);
-            bool max_valid = std::isfinite(params.custom_max_value);
-
-            if (min_valid && max_valid) {
-                return {params.custom_min_value, params.custom_max_value};  //inf或nan表自适应
-            }
-
-            float data_min = std::numeric_limits<float>::max();
-            float data_max = std::numeric_limits<float>::lowest();
-
-            for (const auto& [core, values] : value_data) {
-                for (float val : values) {
-                    if (val < data_min) data_min = val;
-                    if (val > data_max) data_max = val;
-                }
-            }
-
-            if (data_min == std::numeric_limits<float>::max()) {
-                data_min = 0.0f;
-                data_max = 1.0f;
-            }
-
-            float margin = std::max(0.1f, (data_max - data_min) * 0.1f);
-
-            float final_min = min_valid ? params.custom_min_value : std::max(0.0f, data_min - margin);
-            float final_max = max_valid ? params.custom_max_value : data_max + margin;
-
-            return {final_min, final_max};
-        }
-
         float min_val = std::numeric_limits<float>::max();
         float max_val = std::numeric_limits<float>::lowest();
 
@@ -298,9 +273,12 @@ private:
             min_val = 0.0f;
             max_val = 1.0f;
         }
-
         float margin = std::max(0.1f, (max_val - min_val) * 0.1f);  //边距
-        return {std::max(0.0f, min_val - margin), max_val + margin};
+
+        float final_min = (params.use_custom_range && params.use_custom_min_range) ? params.custom_min_value : std::max(0.0f, min_val - margin);
+        float final_max = (params.use_custom_max_range && params.use_custom_range) ? params.custom_max_value : max_val + margin;
+
+        return {final_min, final_max};
     }
 
     void generateSVG(std::stringstream& svg,
@@ -444,17 +422,30 @@ private:
             ticks.push_back((min_val + max_val) / 2.0f);
         }
 
-        float threshold = range * 0.1f;  // 清除最大值附近的标签
-        if (!ticks.empty()) {
-            for (auto it = ticks.rbegin(); it != ticks.rend(); ++it) {
-                float distance = std::abs(*it - realmax);
-                if (distance < threshold) {
-                    ticks.erase(std::next(it).base());
+        std::vector<double> static_ticks;
+        float threshold = range * 0.08f;  // 清除最大值附近的标签
+
+        static_ticks.push_back(realmax);    
+
+        for (double t : params.ticks) {
+            if (t <= max_val) {
+                if (std::abs(t - realmax) > threshold) {    //不包含与最大值接近的
+                    static_ticks.push_back(t);
                 }
             }
         }
 
-        ticks.push_back(realmax);  //最大值
+        if (!ticks.empty()) {
+            for (auto it = ticks.rbegin(); it != ticks.rend(); ++it) {
+                for (double t : static_ticks) {
+                    float distance = std::abs(*it - t);
+                    if (distance < threshold) {
+                        ticks.erase(std::next(it).base());
+                    }
+                }
+            }
+        }
+        ticks.insert(ticks.end(), static_ticks.begin(), static_ticks.end());
         return ticks;
     }
 
@@ -488,7 +479,7 @@ private:
             }
 
             svg << "  <path d=\"" << path.str() << "\" fill=\"none\" stroke=\""
-                << color << "\" stroke-width=\"" << params.data_line_width << "\"/>\n";
+                << color << "\" stroke-width=\"" << params.data_line_width << "\" stroke-opacity=\"" << params.data_line_opacity << "\"/>\n";
         }
     }
 

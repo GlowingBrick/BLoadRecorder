@@ -77,7 +77,7 @@ private:
             }
         }
 
-        const std::map<std::string> gpu_freq_nodes = {
+        const std::vector<std::string> gpu_freq_nodes = {
             "/sys/class/kgsl/kgsl-3d0/gpuclk",  // 高通
             "/sys/devices/platform/soc/3d00000.qcom,kgsl-3d0/devfreq/3d00000.qcom,kgsl-3d0/gpuclk",  //也是高通
             "/sys/devices/platform/13000000.mali/devfreq/13000000.mali/cur_freq",  // Mali

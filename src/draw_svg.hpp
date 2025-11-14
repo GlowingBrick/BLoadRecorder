@@ -394,11 +394,11 @@ void draw_svg(nlohmann::json& result, std::string pkg) {
         SVGFreqPlotter::StyleParams style;
         style.use_custom_range = true;
         style.custom_min_value = 0.0f;
-        style.custom_max_value = std::numeric_limits<float>::infinity();
+        style.use_custom_max_range=false;
         style.label = "帧率";
 
         style.data_line_width = data_line_width(frame_data.size());
-
+        style.ticks={30.0,60.0,90.0,120.0,144.0};
         SVGFreqPlotter plotter(style);
         plotter.drawChart(frame_data, "帧率", "帧率(FPS)");//, "fps.svg");
         svgs.push_back(plotter.getSVG());
@@ -409,7 +409,7 @@ void draw_svg(nlohmann::json& result, std::string pkg) {
         SVGFreqPlotter::StyleParams style;
         style.use_custom_range = true;
         style.custom_min_value = 0.0f;
-        style.custom_max_value = std::numeric_limits<float>::infinity();
+        style.use_custom_max_range=false;
         style.label = "频率";
         if (!frame_data.empty()) {
             style.order = sortcpus(frame_data[0].frequencies);
@@ -447,7 +447,7 @@ void draw_svg(nlohmann::json& result, std::string pkg) {
         SVGFreqPlotter::StyleParams style;
         style.use_custom_range = true;
         style.custom_min_value = 0.0f;
-        style.custom_max_value = std::numeric_limits<float>::infinity();
+        style.use_custom_max_range=false;
         style.label = "温度";
 
         style.data_line_width = data_line_width(frame_data.size());
