@@ -22,7 +22,6 @@ jobs:
 
     - name: Build both versions
       run: |
-        cd ..
         mkdir -p build
         cd build
         cmake ..
