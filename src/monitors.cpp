@@ -20,6 +20,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <thread>
+#include <format>
 
 #include "nlohmann/json.hpp"
 
@@ -41,7 +43,7 @@ public:
         monitors_.push_back(std::make_unique<CPUFreqMonitor>());
         monitors_.push_back(std::make_unique<CPULoadMonitor>());
         monitors_.push_back(std::make_unique<ThermalMonitor>());
-        monitors_.push_back(std::make_unique<FPSMonitor>(true));
+        monitors_.push_back(std::make_unique<FPSMonitor>(false));
         monitors_.push_back(std::make_unique<ThreadMonitor>());
 
         std::cout << "启动监控器..." << std::endl;
@@ -65,7 +67,7 @@ public:
         auto time_t = std::chrono::system_clock::to_time_t(now);
         
         std::stringstream sstime;
-        sstime << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+        sstime << std::put_time(std::localtime(&time_t), "%Y-%m-%d_%H:%M:%S");
         result["info"]["time"]=sstime.str();
 
         for (auto& monitor : monitors_) {
@@ -73,13 +75,13 @@ public:
             result[monitor->name()] = monitor->stop();
         }
 
-        saveToFile(result);
-        draw_svg(result, package_name_);
+        saveToFile(result,package_name_+"_"+sstime.str()+".json");
+        draw_svg(result, package_name_+"_"+sstime.str());
     }
 
 private:
-    void saveToFile(const nlohmann::json& data) {
-        std::ofstream file("monitor_test.json");
+    void saveToFile(const nlohmann::json& data,const std::string name) {
+        std::ofstream file(name);
         if (file.is_open()) {
             file << data.dump(4);
             file.close();
@@ -141,9 +143,10 @@ int main(int argc, char* argv[]) {
     std::string time_value;
     std::string input_file;
     int duration = 30;
+    bool wait = false;
 
     int opt;
-    while ((opt = getopt(argc, argv, "t:i:h")) != -1) {
+    while ((opt = getopt(argc, argv, "t:i:wh")) != -1) {
         switch (opt) {
         case 'i':
             input_file = optarg;
@@ -151,10 +154,14 @@ int main(int argc, char* argv[]) {
         case 't':
             duration = std::stoi(optarg);
             break;
+        case 'w':
+            wait=true;
+            break;
         case 'h':
             std::cout << "食用方法: \n" 
-            << argv[0] << " -t <时间> [包名]\n"
-            << argv[0] << " -i <文件>\n";
+            << argv[0] << "[-w] [-t <时间>] [包名]\n"
+            << argv[0] << " -i <文件>\n"
+            << "\t -w:等待至指定包名出现\n";
             return 0;
         default:
             std::cerr << "未知参数\n";
@@ -189,6 +196,13 @@ int main(int argc, char* argv[]) {
 
     if (optind < argc) {
         pkgname = argv[optind];
+        if(wait == true){
+            std::cout<<"等待："<<pkgname << std::endl;
+            while (getForegroundApp_lru() != pkgname)   //等待指定包名进入前台
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            }
+        }
     } else {
         pkgname = getForegroundApp_lru();
     }
