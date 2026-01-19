@@ -5,11 +5,15 @@ A simple Android frame rate and load recorder
 BMonitor [-w] [-t <时间>] [包名]
 ```
 - -w: 等待对应包名的应用进入前台再开始
-- -t: 录制时长,单位s, 缺省值30
+- -t: 录制时长,单位s, 缺省值30.为0表无限
 例如:
 ``` shell
 ./BMonitor -w -t 60 com.miHoYo.hkrpg
 ```
+
+信号:
+- SIGTERM SIGINT:保存并退出
+
 输出:
 - svg: 图表
 - json: 数据，可以通过-i指令对指定json文件绘制图表

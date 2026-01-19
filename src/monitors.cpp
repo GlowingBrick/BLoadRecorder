@@ -13,17 +13,25 @@
 #include "draw_svg.hpp"
 #include <algorithm>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <map>
 #include <regex>
 #include <set>
 #include <sstream>
 #include <string>
-#include <vector>
 #include <thread>
-#include <format>
+#include <vector>
 
 #include "nlohmann/json.hpp"
+
+bool exit_sig = false;
+
+void handle_signal(int sig) {
+    if (sig == SIGTERM || sig == SIGINT) {
+        exit_sig = true;
+    }
+}
 
 class MainMonitor {
 private:
@@ -53,34 +61,41 @@ public:
                 std::cout << monitor->name() << " 启动失败" << std::endl;
             }
         }
-
-        for (int i = test_duration_; i > 0; --i) {
-            std::cout << "剩余时间: " << i << "秒\r" << std::flush;
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+        if (test_duration_ > 0) {
+            for (int i = test_duration_; i > 0; --i) {
+                std::cout << "剩余时间: " << i << "秒\r" << std::flush;
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+            std::cout << std::endl;
+        } else {
+            test_duration_ = 0;
+            while (exit_sig == false) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                std::cout << "正在运行: " << test_duration_++ << "秒\r" << std::flush;
+            }
         }
-        std::cout << std::endl;
 
         nlohmann::json result;
-        result["info"]["name"]=package_name_;
+        result["info"]["name"] = package_name_;
 
         auto now = std::chrono::system_clock::now();
         auto time_t = std::chrono::system_clock::to_time_t(now);
-        
+
         std::stringstream sstime;
         sstime << std::put_time(std::localtime(&time_t), "%Y-%m-%d_%H:%M:%S");
-        result["info"]["time"]=sstime.str();
+        result["info"]["time"] = sstime.str();
 
         for (auto& monitor : monitors_) {
             std::cout << "停止: " << monitor->name() << std::endl;
             result[monitor->name()] = monitor->stop();
         }
 
-        saveToFile(result,package_name_+"_"+sstime.str()+".json");
-        draw_svg(result, package_name_+"_"+sstime.str());
+        saveToFile(result, package_name_ + "_" + sstime.str() + ".json");
+        draw_svg(result, package_name_ + "_" + sstime.str());
     }
 
 private:
-    void saveToFile(const nlohmann::json& data,const std::string name) {
+    void saveToFile(const nlohmann::json& data, const std::string name) {
         std::ofstream file(name);
         if (file.is_open()) {
             file << data.dump(4);
@@ -155,13 +170,14 @@ int main(int argc, char* argv[]) {
             duration = std::stoi(optarg);
             break;
         case 'w':
-            wait=true;
+            wait = true;
             break;
         case 'h':
-            std::cout << "食用方法: \n" 
-            << argv[0] << "[-w] [-t <时间>] [包名]\n"
-            << argv[0] << " -i <文件>\n"
-            << "\t -w:等待至指定包名出现\n";
+            std::cout << "食用方法: \n"
+                      << argv[0] << "[-w] [-t <时间>] [包名]\n"
+                      << argv[0] << " -i <文件>\n"
+                      << "\t -w:等待至指定包名出现\n"
+                      << "\t -t:记录时长。0表无限\n";
             return 0;
         default:
             std::cerr << "未知参数\n";
@@ -196,9 +212,9 @@ int main(int argc, char* argv[]) {
 
     if (optind < argc) {
         pkgname = argv[optind];
-        if(wait == true){
-            std::cout<<"等待："<<pkgname << std::endl;
-            while (getForegroundApp_lru() != pkgname)   //等待指定包名进入前台
+        if (wait == true) {
+            std::cout << "等待：" << pkgname << std::endl;
+            while (getForegroundApp_lru() != pkgname)  //等待指定包名进入前台
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             }
@@ -206,6 +222,9 @@ int main(int argc, char* argv[]) {
     } else {
         pkgname = getForegroundApp_lru();
     }
+
+    std::signal(SIGTERM, handle_signal);
+    std::signal(SIGINT, handle_signal);
 
     MainMonitor tester(pkgname, duration);
     tester.startTest();
